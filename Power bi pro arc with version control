@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Power BI Pro — Client Architecture with Version Control</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600&display=swap');
+
+:root {
+–gold: #F0A500;
+–gold-light: #FFD166;
+–blue: #0078D4;
+–blue-bright: #40B4FF;
+–teal: #00B4D8;
+–bg: #060C14;
+–surface: #0D1B2A;
+–border: rgba(0,120,212,0.3);
+–text: #C8D8E8;
+–muted: #607080;
+–vc: #FF6BBA;
+–vc-dim: rgba(255,107,186,0.35);
+}
+
+- { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+background: var(–bg);
+color: var(–text);
+font-family: ‘Exo 2’, sans-serif;
+min-height: 100vh;
+}
+
+body::before {
+content: ‘’;
+position: fixed; inset: 0;
+background-image:
+linear-gradient(rgba(0,120,212,0.04) 1px, transparent 1px),
+linear-gradient(90deg, rgba(0,120,212,0.04) 1px, transparent 1px);
+background-size: 40px 40px;
+pointer-events: none;
+}
+
+.page { max-width: 1300px; margin: 0 auto; padding: 36px 28px 56px; }
+
+/* ── Header ── */
+header {
+display: flex; align-items: flex-start; justify-content: space-between;
+flex-wrap: wrap; gap: 12px;
+margin-bottom: 32px; padding-bottom: 20px;
+border-bottom: 1px solid var(–border);
+}
+.header-left h1 {
+font-family: ‘Rajdhani’, sans-serif;
+font-size: 2.2rem; font-weight: 700;
+letter-spacing: 0.08em; line-height: 1; color: #fff;
+}
+.header-left h1 span { color: var(–gold); }
+.header-left p {
+margin-top: 7px; font-size: 0.78rem; color: var(–muted);
+letter-spacing: 0.12em; text-transform: uppercase;
+font-family: ‘Share Tech Mono’, monospace;
+}
+.badges { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
+.badge {
+border-radius: 3px; padding: 4px 13px;
+font-family: ‘Share Tech Mono’, monospace;
+font-size: 0.67rem; letter-spacing: 0.12em;
+text-transform: uppercase; white-space: nowrap;
+}
+.badge-blue  { background: linear-gradient(135deg,#004f9e,#0078D4); border: 1px solid var(–blue-bright); color: var(–blue-bright); }
+.badge-gold  { background: rgba(240,165,0,0.1); border: 1px solid rgba(240,165,0,0.4); color: var(–gold-light); }
+.badge-pink  { background: rgba(255,107,186,0.1); border: 1px solid rgba(255,107,186,0.4); color: #FFAADA; }
+
+/* ── Main two-column canvas ── */
+.canvas {
+display: grid;
+grid-template-columns: 1fr 300px;
+gap: 16px;
+align-items: start;
+}
+
+/* ── Left: main pipeline ── */
+.pipeline { display: flex; flex-direction: column; gap: 10px; }
+
+/* ── Right: version control sidebar ── */
+.vc-sidebar {
+display: flex;
+flex-direction: column;
+gap: 10px;
+position: sticky;
+top: 20px;
+}
+
+.vc-header {
+border: 2px solid var(–vc-dim);
+border-radius: 8px;
+padding: 12px 14px;
+background: rgba(255,107,186,0.04);
+position: relative;
+}
+.vc-header-tag {
+position: absolute; top: -10px; left: 14px;
+background: var(–bg); padding: 0 8px;
+font-family: ‘Share Tech Mono’, monospace;
+font-size: 0.6rem; letter-spacing: 0.2em;
+text-transform: uppercase; color: var(–vc);
+border: 1px solid var(–vc-dim); border-radius: 2px;
+}
+.vc-title {
+font-family: ‘Rajdhani’, sans-serif;
+font-size: 0.75rem; font-weight: 700;
+letter-spacing: 0.15em; text-transform: uppercase;
+color: var(–vc); margin-bottom: 10px;
+display: flex; align-items: center; gap: 7px;
+}
+.vc-title::before {
+content: ‘’;
+width: 7px; height: 7px; border-radius: 50%;
+background: var(–vc); box-shadow: 0 0 6px var(–vc);
+flex-shrink: 0;
+}
+
+.vc-block {
+border: 1px solid var(–vc-dim);
+border-radius: 6px;
+padding: 12px 13px;
+background: rgba(255,107,186,0.03);
+}
+.vc-block-title {
+font-family: ‘Share Tech Mono’, monospace;
+font-size: 0.63rem; letter-spacing: 0.15em;
+text-transform: uppercase; color: var(–vc);
+margin-bottom: 8px; opacity: 0.85;
+}
+
+/* connector lines from sidebar to pipeline */
+.vc-connector {
+display: flex; align-items: center; gap: 6px;
+padding: 4px 0;
+}
+.vc-connector-line {
+flex: 1; height: 1px;
+background: linear-gradient(90deg, var(–vc-dim), transparent);
+}
+.vc-connector-dot {
+width: 6px; height: 6px; border-radius: 50%;
+background: var(–vc); opacity: 0.5; flex-shrink: 0;
+}
+
+/* ── Row helpers ── */
+.row { display: flex; gap: 12px; align-items: stretch; }
+.row-label {
+writing-mode: vertical-rl;
+text-orientation: mixed;
+transform: rotate(180deg);
+font-family: ‘Share Tech Mono’, monospace;
+font-size: 0.58rem; letter-spacing: 0.22em;
+text-transform: uppercase; color: var(–muted);
+min-width: 18px;
+display: flex; align-items: center; justify-content: center;
+flex-shrink: 0;
+}
+.row-content { flex: 1; display: flex; gap: 12px; }
+
+/* ── Layers ── */
+.layer {
+border: 1px solid; border-radius: 6px;
+padding: 12px 14px; flex: 1;
+transition: box-shadow 0.2s;
+}
+.layer:hover { box-shadow: 0 0 18px rgba(0,120,212,0.18); }
+
+.layer-title {
+font-family: ‘Rajdhani’, sans-serif;
+font-size: 0.65rem; font-weight: 600;
+letter-spacing: 0.18em; text-transform: uppercase;
+margin-bottom: 8px;
+display: flex; align-items: center; gap: 7px;
+}
+.layer-title::before {
+content: ‘’; width: 7px; height: 7px;
+border-radius: 50%; flex-shrink: 0;
+}
+
+.l-source   { border-color: rgba(0,180,216,0.35);   background: rgba(0,180,216,0.04); }
+.l-source   .layer-title { color: var(–teal); }
+.l-source   .layer-title::before { background: var(–teal); box-shadow: 0 0 5px var(–teal); }
+
+.l-ingest   { border-color: rgba(240,165,0,0.35);   background: rgba(240,165,0,0.04); }
+.l-ingest   .layer-title { color: var(–gold); }
+.l-ingest   .layer-title::before { background: var(–gold); box-shadow: 0 0 5px var(–gold); }
+
+.l-storage  { border-color: rgba(0,120,212,0.4);    background: rgba(0,120,212,0.05); }
+.l-storage  .layer-title { color: var(–blue-bright); }
+.l-storage  .layer-title::before { background: var(–blue-bright); box-shadow: 0 0 5px var(–blue-bright); }
+
+.l-semantic { border-color: rgba(160,100,220,0.4);  background: rgba(160,100,220,0.04); }
+.l-semantic .layer-title { color: #C87DFF; }
+.l-semantic .layer-title::before { background: #C87DFF; box-shadow: 0 0 5px #C87DFF; }
+
+.l-report   { border-color: rgba(0,200,100,0.35);   background: rgba(0,200,100,0.04); }
+.l-report   .layer-title { color: #4DEFA0; }
+.l-report   .layer-title::before { background: #4DEFA0; box-shadow: 0 0 5px #4DEFA0; }
+
+.l-dist     { border-color: rgba(240,80,80,0.3);    background: rgba(240,80,80,0.04); }
+.l-dist     .layer-title { color: #FF7070; }
+.l-dist     .layer-title::before { background: #FF7070; box-shadow: 0 0 5px #FF7070; }
+
+.l-sec      { border-color: rgba(200,150,50,0.35);  background: rgba(200,150,50,0.04); }
+.l-sec      .layer-title { color: #E8B84B; }
+.l-sec      .layer-title::before { background: #E8B84B; box-shadow: 0 0 5px #E8B84B; }
+
+/* ── Chips ── */
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip {
+font-family: ‘Share Tech Mono’, monospace;
+font-size: 0.66rem; padding: 3px 9px;
+border-radius: 3px; border: 1px solid;
+cursor: default; transition: all 0.15s;
+}
+.chip:hover { filter: brightness(1.3); transform: translateY(-1px); }
+
+.c-teal   { border-color: rgba(0,180,216,0.5);   color: #80E0F8; background: rgba(0,180,216,0.1); }
+.c-gold   { border-color: rgba(240,165,0,0.5);   color: #FFD470; background: rgba(240,165,0,0.1); }
+.c-blue   { border-color: rgba(0,120,212,0.5);   color: #80C4FF; background: rgba(0,120,212,0.1); }
+.c-purple { border-color: rgba(160,100,220,0.5); color: #D4A0FF; background: rgba(160,100,220,0.1); }
+.c-green  { border-color: rgba(0,200,100,0.5);   color: #80FFB8; background: rgba(0,200,100,0.1); }
+.c-red    { border-color: rgba(240,80,80,0.4);   color: #FFB0B0; background: rgba(240,80,80,0.08); }
+.c-amber  { border-color: rgba(200,150,50,0.5);  color: #F5CC80; background: rgba(200,150,50,0.1); }
+.c-pink   { border-color: rgba(255,107,186,0.5); color: #FFAADA; background: rgba(255,107,186,0.08); }
+.chip-hot { border-color: rgba(240,165,0,0.8) !important; color: #FFD470 !important; background: rgba(240,165,0,0.18) !important; font-weight: bold; }
+
+/* ── Flow arrows ── */
+.flow { display: flex; justify-content: center; gap: 56px; padding: 1px 0; }
+.flow-arrow { display: flex; flex-direction: column; align-items: center; }
+.fa-line { width: 1px; height: 13px; background: linear-gradient(180deg, transparent, rgba(0,120,212,0.55)); }
+.fa-head { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 6px solid rgba(0,120,212,0.55); }
+
+/* ── Workspace frame ── */
+.workspace-frame {
+border: 2px solid rgba(0,120,212,0.45);
+border-radius: 10px; padding: 10px;
+background: rgba(0,120,212,0.02);
+position: relative;
+display: flex; flex-direction: column; gap: 10px;
+}
+.workspace-tag {
+position: absolute; top: -11px; left: 16px;
+background: var(–bg); padding: 0 10px;
+font-family: ‘Share Tech Mono’, monospace;
+font-size: 0.6rem; letter-spacing: 0.18em;
+text-transform: uppercase; color: var(–blue-bright);
+border: 1px solid rgba(0,120,212,0.45); border-radius: 2px;
+}
+
+/* ── Scale-up ── */
+.scaleup {
+border: 1px dashed rgba(100,200,255,0.3);
+border-radius: 6px; padding: 10px 14px;
+background: rgba(100,200,255,0.03);
+display: flex; align-items: flex-start; gap: 10px;
+}
+.scaleup-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+.scaleup-body h4 {
+font-family: ‘Rajdhani’, sans-serif;
+font-size: 0.67rem; font-weight: 600;
+letter-spacing: 0.16em; text-transform: uppercase;
+color: #90D8FF; margin-bottom: 6px;
+}
+
+/* ── VC workflow steps ── */
+.vc-steps { display: flex; flex-direction: column; gap: 6px; }
+.vc-step {
+display: flex; gap: 8px; align-items: flex-start;
+}
+.vc-step-num {
+font-family: ‘Share Tech Mono’, monospace;
+font-size: 0.6rem; color: var(–vc);
+background: rgba(255,107,186,0.12);
+border: 1px solid var(–vc-dim);
+border-radius: 50%; width: 18px; height: 18px;
+display: flex; align-items: center; justify-content: center;
+flex-shrink: 0; margin-top: 1px;
+}
+.vc-step-text {
+font-family: ‘Share Tech Mono’, monospace;
+font-size: 0.64rem; color: var(–text);
+line-height: 1.5;
+}
+.vc-step-text strong { color: #FFAADA; }
+
+/* branch diagram */
+.branch-diagram {
+font-family: ‘Share Tech Mono’, monospace;
+font-size: 0.62rem;
+color: var(–text);
+background: rgba(0,0,0,0.3);
+border: 1px solid rgba(255,107,186,0.2);
+border-radius: 4px;
+padding: 10px 12px;
+line-height: 1.8;
+white-space: pre;
+}
+.b-main  { color: #FFAADA; }
+.b-dev   { color: #80FFB8; }
+.b-commit{ color: var(–muted); }
+
+/* ── Notes ── */
+.notes-grid {
+display: grid;
+grid-template-columns: repeat(3, 1fr);
+gap: 12px; margin-top: 18px;
+}
+.note-card {
+background: var(–surface);
+border: 1px solid var(–border);
+border-radius: 6px; padding: 12px 14px;
+}
+.note-card h4 {
+font-family: ‘Rajdhani’, sans-serif;
+font-size: 0.68rem; font-weight: 600;
+letter-spacing: 0.15em; text-transform: uppercase;
+color: var(–gold); margin-bottom: 7px;
+}
+.note-card ul { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.note-card ul li {
+font-size: 0.68rem; color: var(–text);
+display: flex; gap: 5px; line-height: 1.4;
+}
+.note-card ul li::before { content: ‘›’; color: var(–muted); flex-shrink: 0; }
+
+/* ── Footer ── */
+footer {
+margin-top: 22px; padding-top: 14px;
+border-top: 1px solid var(–border);
+display: flex; justify-content: space-between;
+flex-wrap: wrap; gap: 8px;
+}
+footer p {
+font-family: ‘Share Tech Mono’, monospace;
+font-size: 0.61rem; color: var(–muted); letter-spacing: 0.1em;
+}
+.pulse-dot {
+display: inline-block; width: 6px; height: 6px;
+background: #4DEFA0; border-radius: 50%;
+margin-right: 6px; animation: pulse 2s infinite;
+}
+@keyframes pulse {
+0%,100% { opacity:1; box-shadow: 0 0 4px #4DEFA0; }
+50%      { opacity:.4; box-shadow: none; }
+}
+
+@media (max-width: 960px) {
+.canvas { grid-template-columns: 1fr; }
+.vc-sidebar { position: static; }
+.notes-grid { grid-template-columns: 1fr 1fr; }
+.row-content { flex-direction: column; }
+}
+@media (max-width: 540px) {
+.notes-grid { grid-template-columns: 1fr; }
+.header-left h1 { font-size: 1.7rem; }
+}
+</style>
+
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="header-left">
+      <h1>POWER BI <span>PRO</span> — CLIENT ARCHITECTURE</h1>
+      <p>Internal Employees · Single Workspace · .pbip + Azure DevOps Version Control</p>
+    </div>
+    <div class="badges">
+      <div class="badge badge-blue">Power BI Pro · $10 / user / mo</div>
+      <div class="badge badge-gold">Single Workspace · Scalable to Dev + Prod</div>
+      <div class="badge badge-pink">Version Control: .pbip + Azure DevOps Git</div>
+    </div>
+  </header>
+
+  <!-- ── Two-column canvas ── -->
+
+  <div class="canvas">
+
+```
+<!-- LEFT: Pipeline -->
+<div class="pipeline">
+
+  <!-- ① Sources -->
+  <div class="row">
+    <div class="row-label">Sources</div>
+    <div class="row-content">
+      <div class="layer l-source" style="flex:1.2">
+        <div class="layer-title">SAP HANA Data Warehouse</div>
+        <div class="chips">
+          <span class="chip c-teal">SAP HANA Cloud / On-Prem</span>
+          <span class="chip c-teal">Native HANA Connector</span>
+          <span class="chip c-teal">On-Prem Data Gateway</span>
+          <span class="chip c-teal">HANA Calc Views</span>
+        </div>
+      </div>
+      <div class="layer l-source" style="flex:1">
+        <div class="layer-title">SharePoint — Excel Files</div>
+        <div class="chips">
+          <span class="chip c-teal">SharePoint Online Library</span>
+          <span class="chip c-teal">Excel Workbooks (.xlsx)</span>
+          <span class="chip c-teal">Named Tables / Ranges</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow">
+    <div class="flow-arrow"><div class="fa-line"></div><div class="fa-head"></div></div>
+    <div class="flow-arrow"><div class="fa-line"></div><div class="fa-head"></div></div>
+  </div>
+
+  <!-- ② Ingestion -->
+  <div class="row">
+    <div class="row-label">Ingest</div>
+    <div class="row-content">
+      <div class="layer l-ingest" style="flex:1.5">
+        <div class="layer-title">Dataflow Gen1 — Power Query</div>
+        <div class="chips">
+          <span class="chip c-gold">M Language Transforms</span>
+          <span class="chip c-gold">Merge SAP HANA + Excel</span>
+          <span class="chip c-gold">Reusable Entities</span>
+          <span class="chip c-gold">Linked / Computed Entities</span>
+          <span class="chip c-gold">Single Source of Truth</span>
+        </div>
+      </div>
+      <div class="layer l-ingest" style="flex:1">
+        <div class="layer-title">Refresh Schedule</div>
+        <div class="chips">
+          <span class="chip c-gold chip-hot">4× / day (6h interval)</span>
+          <span class="chip c-gold">Dataflow refreshes first</span>
+          <span class="chip c-gold">Dataset +30 min offset</span>
+          <span class="chip c-gold">Failure Alert Email</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow">
+    <div class="flow-arrow"><div class="fa-line"></div><div class="fa-head"></div></div>
+    <div class="flow-arrow"><div class="fa-line"></div><div class="fa-head"></div></div>
+  </div>
+
+  <!-- ③ Workspace -->
+  <div class="workspace-frame">
+    <div class="workspace-tag">Pro Workspace — Single (scalable to Dev + Prod)</div>
+
+    <div class="row">
+      <div class="row-label">Storage</div>
+      <div class="row-content">
+        <div class="layer l-storage">
+          <div class="layer-title">Semantic Model (Dataset)</div>
+          <div class="chips">
+            <span class="chip c-blue">Import Mode</span>
+            <span class="chip c-blue">Star Schema</span>
+            <span class="chip c-blue">Row-Level Security</span>
+            <span class="chip c-blue">Incremental Refresh</span>
+            <span class="chip c-blue chip-hot">1 GB limit (Pro)</span>
+            <span class="chip c-blue">Dataflow as Source</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="row-label">Semantic</div>
+      <div class="row-content">
+        <div class="layer l-semantic">
+          <div class="layer-title">Data Model (AS Engine)</div>
+          <div class="chips">
+            <span class="chip c-purple">DAX Measures</span>
+            <span class="chip c-purple">Calc. Columns / Tables</span>
+            <span class="chip c-purple">Date Table (official)</span>
+            <span class="chip c-purple">Relationships</span>
+            <span class="chip c-purple">KPI Definitions</span>
+            <span class="chip c-purple">Display Folders</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="row-label">Reports</div>
+      <div class="row-content">
+        <div class="layer l-report">
+          <div class="layer-title">Power BI Report (.pbix / .pbip)</div>
+          <div class="chips">
+            <span class="chip c-green">Desktop Authoring</span>
+            <span class="chip c-green">Bookmarks / Drillthrough</span>
+            <span class="chip c-green">Custom Visuals</span>
+            <span class="chip c-green">JSON Theme</span>
+          </div>
+        </div>
+        <div class="layer l-report">
+          <div class="layer-title">Paginated Report (.rdl)</div>
+          <div class="chips">
+            <span class="chip c-green">Pixel-Perfect Layout</span>
+            <span class="chip c-green">Print-Ready PDF</span>
+            <span class="chip c-green">Report Builder</span>
+          </div>
+        </div>
+        <div class="layer l-report">
+          <div class="layer-title">Dashboard</div>
+          <div class="chips">
+            <span class="chip c-green">Pinned Live Tiles</span>
+            <span class="chip c-green">KPI Summary</span>
+            <span class="chip c-green">Q&A / Anomaly</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end workspace-frame -->
+
+  <div class="flow">
+    <div class="flow-arrow"><div class="fa-line"></div><div class="fa-head"></div></div>
+    <div class="flow-arrow"><div class="fa-line"></div><div class="fa-head"></div></div>
+  </div>
+
+  <!-- ④ Distribution -->
+  <div class="row">
+    <div class="row-label">Distribute</div>
+    <div class="row-content">
+      <div class="layer l-dist" style="flex:1.3">
+        <div class="layer-title">Distribution Channels</div>
+        <div class="chips">
+          <span class="chip c-red">Microsoft Teams</span>
+          <span class="chip c-red">Power BI Service (Web)</span>
+          <span class="chip c-red">Email Subscriptions</span>
+          <span class="chip c-red">PDF / PPT Export</span>
+        </div>
+      </div>
+      <div class="layer l-dist" style="flex:1">
+        <div class="layer-title">Power BI App (Prod Gate)</div>
+        <div class="chips">
+          <span class="chip c-red">Curated Navigation</span>
+          <span class="chip c-red">Audience → AAD Group</span>
+          <span class="chip c-red">Custom Branding</span>
+          <span class="chip c-red">Workspace hidden from users</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ Security -->
+  <div class="row">
+    <div class="row-label">Security</div>
+    <div class="row-content">
+      <div class="layer l-sec">
+        <div class="layer-title">Azure AD / Entra ID</div>
+        <div class="chips">
+          <span class="chip c-amber">AAD Security Groups</span>
+          <span class="chip c-amber">Group-based Workspace Roles</span>
+          <span class="chip c-amber">MFA Enforcement</span>
+          <span class="chip c-amber">Conditional Access</span>
+        </div>
+      </div>
+      <div class="layer l-sec">
+        <div class="layer-title">Data Access</div>
+        <div class="chips">
+          <span class="chip c-amber">Row-Level Security (RLS)</span>
+          <span class="chip c-amber">Dynamic RLS — USERPRINCIPALNAME()</span>
+          <span class="chip c-amber">Object-Level Security</span>
+          <span class="chip c-amber">Usage Metrics / Audit Log</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑥ Scale-up -->
+  <div class="scaleup">
+    <div class="scaleup-icon">⬆</div>
+    <div class="scaleup-body">
+      <h4>Scale-Up: When to add Dev + Prod Workspace</h4>
+      <div class="chips">
+        <span class="chip c-blue" style="font-size:0.62rem">Team grows beyond 2–3 devs</span>
+        <span class="chip c-blue" style="font-size:0.62rem">Simultaneous publish risk increases</span>
+        <span class="chip c-blue" style="font-size:0.62rem">→ Add Prod workspace, use main branch publish</span>
+        <span class="chip c-blue" style="font-size:0.62rem">→ PPU for automated Deployment Pipelines</span>
+        <span class="chip c-blue" style="font-size:0.62rem">No extra workspace cost — license change only</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .pipeline -->
+
+<!-- RIGHT: Version Control Sidebar -->
+<div class="vc-sidebar">
+
+  <div class="vc-header">
+    <div class="vc-header-tag">Recommended</div>
+    <div class="vc-title">Version Control Layer</div>
+    <div class="chips" style="margin-bottom:10px;">
+      <span class="chip c-pink">.pbip Format</span>
+      <span class="chip c-pink">Azure DevOps Git</span>
+      <span class="chip c-pink">REST API Publish</span>
+    </div>
+    <div class="chips">
+      <span class="chip c-pink" style="font-size:0.62rem">✓ No Premium required</span>
+      <span class="chip c-pink" style="font-size:0.62rem">✓ Full diff on DAX / visuals</span>
+      <span class="chip c-pink" style="font-size:0.62rem">✓ Rollback any version</span>
+    </div>
+  </div>
+
+  <!-- Step 1: .pbip -->
+  <div class="vc-block">
+    <div class="vc-title" style="font-size:0.65rem; margin-bottom:8px;">① Save as .pbip in Desktop</div>
+    <div class="chips" style="margin-bottom:8px;">
+      <span class="chip c-pink">File → Save as → Power BI Project</span>
+    </div>
+    <div class="chips">
+      <span class="chip c-pink" style="font-size:0.6rem;">report.pbip</span>
+      <span class="chip c-pink" style="font-size:0.6rem;">report.Dataset/</span>
+      <span class="chip c-pink" style="font-size:0.6rem;">model.bim (JSON)</span>
+      <span class="chip c-pink" style="font-size:0.6rem;">report.pbir (JSON)</span>
+      <span class="chip c-pink" style="font-size:0.6rem;">definition.pbidataset</span>
+    </div>
+  </div>
+
+  <!-- Step 2: Git repo -->
+  <div class="vc-block">
+    <div class="vc-title" style="font-size:0.65rem; margin-bottom:8px;">② Azure DevOps Git Repo</div>
+    <div class="branch-diagram"><span class="b-main">main</span>   ──●──●──●──▶ Prod
+     │
+```
+
+<span class="b-dev">dev</span>    ──●──●──────▶ Work
+<span class="b-commit">         ↑
+commit + PR</span></div>
+</div>
+
+```
+  <!-- Step 3: workflow -->
+  <div class="vc-block">
+    <div class="vc-title" style="font-size:0.65rem; margin-bottom:8px;">③ Developer Workflow</div>
+    <div class="vc-steps">
+      <div class="vc-step">
+        <div class="vc-step-num">1</div>
+        <div class="vc-step-text">Edit in <strong>Power BI Desktop</strong> (.pbip)</div>
+      </div>
+      <div class="vc-step">
+        <div class="vc-step-num">2</div>
+        <div class="vc-step-text"><strong>git commit</strong> changes with message</div>
+      </div>
+      <div class="vc-step">
+        <div class="vc-step-num">3</div>
+        <div class="vc-step-text"><strong>Pull Request</strong> → peer review diff</div>
+      </div>
+      <div class="vc-step">
+        <div class="vc-step-num">4</div>
+        <div class="vc-step-text">Merge to <strong>main</strong> → triggers pipeline</div>
+      </div>
+      <div class="vc-step">
+        <div class="vc-step-num">5</div>
+        <div class="vc-step-text"><strong>REST API</strong> publishes .pbix to workspace</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: DevOps Pipeline -->
+  <div class="vc-block">
+    <div class="vc-title" style="font-size:0.65rem; margin-bottom:8px;">④ Azure DevOps Pipeline (CI/CD)</div>
+    <div class="chips">
+      <span class="chip c-pink" style="font-size:0.6rem;">Trigger on main merge</span>
+      <span class="chip c-pink" style="font-size:0.6rem;">PowerShell + PBI REST API</span>
+      <span class="chip c-pink" style="font-size:0.6rem;">POST /imports (upload .pbix)</span>
+      <span class="chip c-pink" style="font-size:0.6rem;">Service Principal Auth (AAD)</span>
+      <span class="chip c-pink" style="font-size:0.6rem;">Free DevOps tier (≤5 users)</span>
+    </div>
+  </div>
+
+  <!-- Enable preview -->
+  <div class="vc-block" style="border-color:rgba(255,107,186,0.2);">
+    <div class="vc-block-title">Enable .pbip in Desktop</div>
+    <div style="font-family:'Share Tech Mono',monospace; font-size:0.62rem; color:var(--text); line-height:1.7;">
+      File → Options &amp; Settings<br>
+      → Options → Preview Features<br>
+      → ✓ <span style="color:#FFAADA;">Power BI Project (.pbip)</span>
+    </div>
+  </div>
+
+  <!-- What's versioned -->
+  <div class="vc-block" style="border-color:rgba(255,107,186,0.2);">
+    <div class="vc-block-title">What gets versioned</div>
+    <div class="chips">
+      <span class="chip c-pink" style="font-size:0.6rem;">✓ DAX measures</span>
+      <span class="chip c-pink" style="font-size:0.6rem;">✓ Report layout</span>
+      <span class="chip c-pink" style="font-size:0.6rem;">✓ Visuals config</span>
+      <span class="chip c-pink" style="font-size:0.6rem;">✓ Relationships</span>
+      <span class="chip c-pink" style="font-size:0.6rem;">✓ Model schema</span>
+      <span class="chip c-pink" style="font-size:0.6rem;">✗ Data (not stored)</span>
+      <span class="chip c-pink" style="font-size:0.6rem;">✗ Credentials</span>
+    </div>
+  </div>
+
+</div><!-- end .vc-sidebar -->
+```
+
+  </div><!-- end .canvas -->
+
+  <!-- Notes -->
+
+  <div class="notes-grid">
+    <div class="note-card">
+      <h4>.pbip vs .pbix</h4>
+      <ul>
+        <li>.pbix is binary — Git stores it but you can't diff it meaningfully</li>
+        <li>.pbip splits into JSON files — every DAX change is readable in a PR</li>
+        <li>Both open identically in Power BI Desktop</li>
+        <li>Enable via Preview Features — stable as of late 2024</li>
+      </ul>
+    </div>
+    <div class="note-card">
+      <h4>Azure DevOps REST Publish</h4>
+      <ul>
+        <li>Use Service Principal (not personal account) for pipeline auth</li>
+        <li>Grant SP "Member" role on target workspace</li>
+        <li>PowerShell: Import-PowerBIFile or REST POST /imports</li>
+        <li>Free tier covers up to 5 users and unlimited private repos</li>
+      </ul>
+    </div>
+    <div class="note-card">
+      <h4>Branching Strategy</h4>
+      <ul>
+        <li>main branch = production-ready, protected (require PR)</li>
+        <li>dev branch = active development, published to workspace</li>
+        <li>Scale to Dev + Prod: dev branch → Dev workspace, main → Prod workspace</li>
+        <li>Tag releases: v1.0, v1.1 for audit trail</li>
+      </ul>
+    </div>
+  </div>
+
+  <footer>
+    <p><span class="pulse-dot"></span>Power BI Pro · .pbip + Azure DevOps Git · Internal Employees</p>
+    <p>Scalable to Dev + Prod · No Premium required for version control · March 2026</p>
+  </footer>
+
+</div>
+</body>
+</html>
