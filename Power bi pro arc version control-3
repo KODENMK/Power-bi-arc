@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Power BI Pro — Architecture</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/*
+
+- COLOR SYSTEM — WCAG AA accessible, semantically distinct
+- Source       #0055A4  deep blue      (data origin)
+- Ingest       #B85C00  burnt orange   (movement/ETL)
+- Storage      #1A6B40  deep green     (persistence)
+- Semantic     #5C3A9E  deep violet    (logic/model)
+- Reports      #0B6373  deep teal      (presentation)
+- Distribution #9C2C2C  deep red       (delivery)
+- Security     #374151  slate          (cross-cutting concern)
+- VersionCtrl  #6B4E00  dark amber     (engineering)
+- Constraint   #B85C00  same as ingest (warning = limit)
+  */
+  :root {
+  –c-src:  #0055A4;
+  –c-ing:  #B85C00;
+  –c-sto:  #1A6B40;
+  –c-sem:  #5C3A9E;
+  –c-rep:  #0B6373;
+  –c-dis:  #9C2C2C;
+  –c-sec:  #374151;
+  –c-vc:   #6B4E00;
+
+```
+--bg:       #F4F6F9;
+--surface:  #FFFFFF;
+--border:   #D8DCE4;
+--rail:     #C8CDD8;
+--text:     #111827;
+--text-2:   #374151;
+--text-3:   #6B7280;
+--warn-bg:  #FFF3E0;
+--warn-bd:  #D97706;
+--warn-tx:  #7C3A00;
+```
+
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+background: var(–bg);
+color: var(–text);
+font-family: ‘Inter’, sans-serif;
+font-size: 13px;
+line-height: 1.5;
+-webkit-font-smoothing: antialiased;
+}
+
+.page { max-width: 1280px; margin: 0 auto; padding: 36px 32px 56px; }
+
+/* ── HEADER ── */
+header {
+display: flex; align-items: flex-end; justify-content: space-between;
+flex-wrap: wrap; gap: 14px;
+border-bottom: 2px solid var(–text);
+padding-bottom: 18px; margin-bottom: 28px;
+}
+header h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; }
+header p  { margin-top: 3px; font-size: 0.72rem; color: var(–text-3); font-family: ‘JetBrains Mono’, monospace; }
+.hpills   { display: flex; flex-wrap: wrap; gap: 7px; align-items: flex-end; }
+.hpill {
+font-family: ‘JetBrains Mono’, monospace;
+font-size: 0.65rem; padding: 3px 9px;
+border-radius: 3px; border: 1px solid; white-space: nowrap;
+}
+.hp-b { color: var(–c-src); border-color: var(–c-src); background: #EBF2FF; }
+.hp-g { color: var(–c-sto); border-color: var(–c-sto); background: #EBF6EF; }
+.hp-a { color: var(–c-vc);  border-color: var(–c-vc);  background: #FEF8E7; }
+
+/* ── CANVAS ── */
+.canvas {
+display: flex;
+flex-direction: column;
+gap: 28px;
+}
+
+/* ── PIPELINE ── */
+.pipeline { display: flex; flex-direction: column; }
+
+/* Each pipeline row = label + cards side by side */
+.p-row {
+display: grid;
+grid-template-columns: 80px 1fr;
+gap: 0;
+}
+
+.p-label {
+display: flex; align-items: center; justify-content: flex-end;
+padding: 14px 12px 14px 0;
+border-right: 2px solid var(–rail);
+font-family: ‘JetBrains Mono’, monospace;
+font-size: 0.58rem; font-weight: 500;
+letter-spacing: 0.1em; text-transform: uppercase;
+color: var(–text-3);
+white-space: nowrap;
+}
+
+.p-body { padding: 10px 0 10px 14px; }
+
+/* Arrow connector */
+.p-arrow {
+display: grid;
+grid-template-columns: 80px 1fr;
+}
+.p-arrow-rail {
+border-right: 2px solid var(–rail);
+display: flex; align-items: center; justify-content: flex-end;
+padding-right: 0;
+}
+.p-arrow-body {
+padding-left: 14px;
+display: flex; align-items: center; gap: 40px;
+height: 22px;
+}
+.arr { display: flex; flex-direction: column; align-items: center; }
+.arr-line { width: 1px; height: 14px; background: var(–text-3); opacity: 0.35; }
+.arr-tip  { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid var(–text-3); opacity: 0.35; }
+
+/* ── CARD GRID ── */
+/* Use a responsive auto-fill grid instead of flex to prevent overlap */
+.card-grid {
+display: grid;
+grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+gap: 8px;
+}
+.card-grid.two   { grid-template-columns: repeat(2, 1fr); }
+.card-grid.three { grid-template-columns: repeat(3, 1fr); }
+.card-grid.one   { grid-template-columns: 1fr; }
+
+.card {
+background: var(–surface);
+border: 1px solid var(–border);
+border-radius: 4px;
+padding: 10px 11px;
+min-width: 0;
+}
+
+.card-head {
+display: flex; align-items: center; gap: 6px;
+margin-bottom: 7px;
+}
+.card-icon { width: 18px; height: 18px; flex-shrink: 0; }
+.card-title {
+font-size: 0.7rem; font-weight: 600;
+color: var(–text); line-height: 1.3;
+}
+
+.tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag {
+font-family: ‘JetBrains Mono’, monospace;
+font-size: 0.6rem; padding: 2px 6px;
+border-radius: 2px;
+background: var(–bg);
+border: 1px solid var(–border);
+color: var(–text-2);
+white-space: nowrap;
+}
+.tag-l { border-left-width: 2px; }
+.tag-warn {
+background: var(–warn-bg); border-color: var(–warn-bd);
+color: var(–warn-tx); font-weight: 500;
+}
+
+/* ── WORKSPACE FRAME ── */
+.ws-frame {
+border: 1.5px solid #93C5FD;
+border-radius: 5px;
+background: #F0F6FF;
+overflow: hidden;
+margin: 2px 0;
+}
+.ws-banner {
+background: #DBEAFE;
+border-bottom: 1px solid #93C5FD;
+padding: 5px 12px;
+font-family: ‘JetBrains Mono’, monospace;
+font-size: 0.62rem; font-weight: 500;
+color: #1E40AF; letter-spacing: 0.04em;
+display: flex; align-items: center; gap: 7px;
+}
+.ws-body { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.ws-section-label {
+font-family: ‘JetBrains Mono’, monospace;
+font-size: 0.57rem; font-weight: 500;
+letter-spacing: 0.1em; text-transform: uppercase;
+margin-bottom: 5px;
+}
+
+/* Workspace grid — same auto-fill approach */
+.ws-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 7px; }
+
+/* ── SCALE-UP NOTE ── */
+.scaleup {
+display: grid; grid-template-columns: 80px 1fr;
+margin-top: 2px;
+}
+.scaleup-rail { border-right: 2px solid var(–rail); }
+.scaleup-body {
+margin-left: 14px;
+border: 1px dashed #9CA3AF;
+border-radius: 4px;
+background: #F9FAFB;
+padding: 10px 13px;
+}
+.scaleup-body h4 {
+font-size: 0.68rem; font-weight: 600;
+color: var(–text-2); margin-bottom: 6px;
+}
+
+/* ── VERSION CONTROL — full-width bottom section ── */
+.vc-sidebar {
+border-top: 3px solid #C9A227;
+padding-top: 18px;
+}
+.vc-hdr {
+display: flex; align-items: baseline; gap: 14px;
+padding-bottom: 12px; border-bottom: 1px solid var(–border);
+margin-bottom: 14px;
+}
+.vc-hdr h2 {
+font-size: 0.72rem; font-weight: 700;
+letter-spacing: 0.08em; text-transform: uppercase;
+color: var(–c-vc);
+display: flex; align-items: center; gap: 7px;
+white-space: nowrap;
+}
+.vc-hdr p { font-size: 0.67rem; color: var(–text-3); }
+
+/* Grid of VC sections side by side */
+.vc-grid {
+display: grid;
+grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+gap: 14px;
+align-items: start;
+}
+
+.vc-sec { display: flex; flex-direction: column; gap: 5px; }
+.vc-sec-title {
+font-family: ‘JetBrains Mono’, monospace;
+font-size: 0.58rem; font-weight: 500;
+letter-spacing: 0.1em; text-transform: uppercase;
+color: var(–c-vc); opacity: 0.85;
+}
+.vc-card {
+background: var(–surface); border: 1px solid var(–border);
+border-radius: 4px; padding: 10px 11px;
+}
+
+/* Branch diagram */
+.branch {
+font-family: ‘JetBrains Mono’, monospace;
+font-size: 0.63rem; line-height: 2;
+background: #F9FAFB; border: 1px solid var(–border);
+border-radius: 4px; padding: 9px 12px;
+color: var(–text-2); white-space: pre;
+}
+.bm { color: #1D4ED8; font-weight: 600; }
+.bd { color: #166534; font-weight: 600; }
+.bn { color: var(–text-3); }
+
+/* Steps */
+.steps { display: flex; flex-direction: column; gap: 8px; }
+.step  { display: flex; gap: 8px; align-items: flex-start; }
+.snum {
+font-family: ‘JetBrains Mono’, monospace;
+font-size: 0.58rem; font-weight: 600;
+width: 18px; height: 18px; border-radius: 50%;
+border: 1.5px solid #C9A227; color: var(–c-vc);
+display: flex; align-items: center; justify-content: center;
+flex-shrink: 0; margin-top: 1px;
+}
+.stxt { font-size: 0.67rem; color: var(–text-2); line-height: 1.5; }
+.stxt strong { color: var(–text); font-weight: 600; }
+
+/* VC table */
+.vc-tbl { width: 100%; border-collapse: collapse; }
+.vc-tbl td {
+font-family: ‘JetBrains Mono’, monospace;
+font-size: 0.61rem; padding: 3px 6px;
+border-bottom: 1px solid var(–border);
+color: var(–text-2);
+}
+.vc-tbl td:first-child { width: 16px; font-weight: 600; }
+.vc-tbl tr:last-child td { border-bottom: none; }
+.ty { color: #166534; }
+.tn { color: #9C2C2C; }
+
+/* ── LEGEND ── */
+.legend {
+margin-top: 26px; padding-top: 14px;
+border-top: 1px solid var(–border);
+display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
+}
+.leg-title {
+font-size: 0.62rem; font-weight: 600;
+letter-spacing: 0.08em; text-transform: uppercase;
+color: var(–text-3);
+}
+.leg-item { display: flex; align-items: center; gap: 5px; font-size: 0.67rem; color: var(–text-2); }
+.leg-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── FOOTER ── */
+footer {
+margin-top: 18px; padding-top: 14px;
+border-top: 1px solid var(–border);
+display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px;
+}
+footer p { font-family: ‘JetBrains Mono’, monospace; font-size: 0.61rem; color: var(–text-3); }
+
+/* ── Card top-color accent ── */
+.ct-src  { border-top: 2.5px solid var(–c-src); }
+.ct-ing  { border-top: 2.5px solid var(–c-ing); }
+.ct-sto  { border-top: 2.5px solid var(–c-sto); }
+.ct-sem  { border-top: 2.5px solid var(–c-sem); }
+.ct-rep  { border-top: 2.5px solid var(–c-rep); }
+.ct-dis  { border-top: 2.5px solid var(–c-dis); }
+.ct-sec  { border-top: 2.5px solid var(–c-sec); }
+.ct-vc   { border-top: 2.5px solid var(–c-vc);  }
+.tl-src  { border-left-color: var(–c-src); }
+.tl-ing  { border-left-color: var(–c-ing); }
+.tl-sto  { border-left-color: var(–c-sto); }
+.tl-sem  { border-left-color: var(–c-sem); }
+.tl-rep  { border-left-color: var(–c-rep); }
+.tl-dis  { border-left-color: var(–c-dis); }
+.tl-sec  { border-left-color: var(–c-sec); }
+.tl-vc   { border-left-color: var(–c-vc);  }
+
+@media (max-width: 900px) {
+.card-grid.three { grid-template-columns: repeat(2, 1fr); }
+.vc-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+
+<!-- ── INLINE SVG ICON DEFS ── -->
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!-- SAP logo simplified -->
+    <symbol id="i-sap" viewBox="0 0 32 32">
+      <rect width="32" height="32" rx="4" fill="#009BDE"/>
+      <text x="5" y="22" font-family="Arial" font-weight="bold" font-size="13" fill="white">SAP</text>
+    </symbol>
+    <!-- SharePoint -->
+    <symbol id="i-sp" viewBox="0 0 32 32">
+      <rect width="32" height="32" rx="4" fill="#0364B8"/>
+      <circle cx="13" cy="16" r="7" fill="#1BAEEA"/>
+      <circle cx="20" cy="16" r="7" fill="#199BE2"/>
+      <circle cx="16" cy="16" r="7" fill="white" fill-opacity="0.15"/>
+      <text x="9" y="20" font-family="Arial" font-weight="bold" font-size="11" fill="white">S</text>
+    </symbol>
+    <!-- Power Query / Dataflow -->
+    <symbol id="i-pq" viewBox="0 0 32 32">
+      <rect width="32" height="32" rx="4" fill="#B85C00"/>
+      <path d="M7 16 L14 9 L25 9 L25 23 L14 23 Z" fill="white" fill-opacity="0.9"/>
+      <text x="10" y="20" font-family="Arial" font-weight="bold" font-size="9" fill="#B85C00">PQ</text>
+    </symbol>
+    <!-- Power BI -->
+    <symbol id="i-pbi" viewBox="0 0 32 32">
+      <rect width="32" height="32" rx="4" fill="#F2C811"/>
+      <rect x="7"  y="18" width="5" height="8"  rx="1" fill="#1A1A2E"/>
+      <rect x="14" y="12" width="5" height="14" rx="1" fill="#1A1A2E"/>
+      <rect x="21" y="7"  width="5" height="19" rx="1" fill="#1A1A2E"/>
+    </symbol>
+    <!-- Azure AD / Entra -->
+    <symbol id="i-aad" viewBox="0 0 32 32">
+      <rect width="32" height="32" rx="4" fill="#0078D4"/>
+      <path d="M16 4 L28 10 L28 22 L16 28 L4 22 L4 10 Z" fill="white" fill-opacity="0.15"/>
+      <path d="M16 8 L24 12 L24 20 L16 24 L8 20 L8 12 Z" fill="white" fill-opacity="0.25"/>
+      <circle cx="16" cy="16" r="5" fill="white"/>
+    </symbol>
+    <!-- Git / DevOps -->
+    <symbol id="i-git" viewBox="0 0 32 32">
+      <rect width="32" height="32" rx="4" fill="#F05032"/>
+      <path d="M28.857 14.72L17.28 3.143a1.638 1.638 0 00-2.317 0l-2.31 2.31 2.928 2.928a1.945 1.945 0 012.457 2.475l2.821 2.821a1.946 1.946 0 11-1.165 1.096L17.1 11.69v7.077a1.945 1.945 0 11-1.6-.062V11.6a1.944 1.944 0 01-1.056-2.55L11.47 6.102 3.143 14.43a1.638 1.638 0 000 2.317L14.72 28.123a1.638 1.638 0 002.317 0L28.857 16.3a1.638 1.638 0 000-2.317" fill="white"/>
+    </symbol>
+    <!-- Teams -->
+    <symbol id="i-teams" viewBox="0 0 32 32">
+      <rect width="32" height="32" rx="4" fill="#4B53BC"/>
+      <circle cx="21" cy="11" r="4" fill="white"/>
+      <path d="M21 16c-3 0-8 1.5-8 4.5V23h16v-2.5C29 17.5 24 16 21 16z" fill="white"/>
+      <circle cx="12" cy="13" r="3.5" fill="white" fill-opacity="0.9"/>
+      <path d="M12 18c-2.5 0-7 1.2-7 3.8V24h10v-2.2C15 19.2 14 18 12 18z" fill="white" fill-opacity="0.9"/>
+    </symbol>
+    <!-- GitHub / repo -->
+    <symbol id="i-repo" viewBox="0 0 32 32">
+      <rect width="32" height="32" rx="4" fill="#24292E"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M16 5.343C9.373 5.343 4 10.716 4 17.343c0 5.296 3.438 9.794 8.207 11.382.6.11.819-.26.819-.578 0-.284-.01-1.04-.016-2.04-3.338.727-4.043-1.61-4.043-1.61-.546-1.387-1.332-1.757-1.332-1.757-1.089-.744.082-.729.082-.729 1.204.085 1.837 1.236 1.837 1.236 1.07 1.835 2.809 1.305 3.495.997.109-.775.419-1.305.762-1.605-2.665-.302-5.467-1.332-5.467-5.93 0-1.31.468-2.382 1.236-3.221-.124-.303-.536-1.525.117-3.176 0 0 1.007-.323 3.3 1.23a11.5 11.5 0 013.005-.404c1.02.005 2.047.138 3.006.404 2.29-1.553 3.296-1.23 3.296-1.23.654 1.652.243 2.873.12 3.176.77.84 1.233 1.91 1.233 3.22 0 4.61-2.807 5.625-5.48 5.92.432.372.816 1.102.816 2.22 0 1.606-.015 2.896-.015 3.293 0 .32.216.694.824.576C24.566 27.132 28 22.638 28 17.343c0-6.628-5.373-12-12-12z" fill="white"/>
+    </symbol>
+    <!-- Shield / Security -->
+    <symbol id="i-shield" viewBox="0 0 32 32">
+      <rect width="32" height="32" rx="4" fill="#374151"/>
+      <path d="M16 5 L26 9 L26 18 C26 23 21 27 16 28 C11 27 6 23 6 18 L6 9 Z" fill="white" fill-opacity="0.15" stroke="white" stroke-width="1.5"/>
+      <path d="M12 16 L15 19 L21 13" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </symbol>
+  </defs>
+</svg>
+
+</head>
+<body>
+<div class="page">
+
+<!-- ── HEADER ── -->
+
+<header>
+  <div>
+    <h1>Power BI Pro — Client Architecture</h1>
+    <p>Internal Employees · Single Workspace · SAP HANA + SharePoint · March 2026</p>
+  </div>
+  <div class="hpills">
+    <span class="hpill hp-b">Pro License · $10 / user / mo</span>
+    <span class="hpill hp-g">Single Workspace · Scalable to Dev + Prod</span>
+    <span class="hpill hp-a">.pbip + Azure DevOps Git</span>
+  </div>
+</header>
+
+<div class="canvas">
+
+<!-- ══════════════════ LEFT: PIPELINE ══════════════════ -->
+
+<div class="pipeline">
+
+  <!-- ① SOURCE -->
+
+  <div class="p-row">
+    <div class="p-label" style="color:var(--c-src);">Source</div>
+    <div class="p-body">
+      <div class="card-grid two">
+
+```
+    <div class="card ct-src">
+      <div class="card-head">
+        <svg class="card-icon"><use href="#i-sap"/></svg>
+        <span class="card-title">SAP HANA Data Warehouse</span>
+      </div>
+      <div class="tags">
+        <span class="tag tag-l tl-src">HANA Cloud / On-Prem</span>
+        <span class="tag tag-l tl-src">Native HANA Connector</span>
+        <span class="tag tag-l tl-src">On-Prem Data Gateway</span>
+        <span class="tag tag-l tl-src">HANA Calculation Views</span>
+      </div>
+    </div>
+
+    <div class="card ct-src">
+      <div class="card-head">
+        <svg class="card-icon"><use href="#i-sp"/></svg>
+        <span class="card-title">SharePoint Online — Excel Files</span>
+      </div>
+      <div class="tags">
+        <span class="tag tag-l tl-src">SharePoint Online Library</span>
+        <span class="tag tag-l tl-src">Excel Workbooks (.xlsx)</span>
+        <span class="tag tag-l tl-src">Named Tables / Ranges</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+```
+
+  </div>
+
+  <!-- arrow -->
+
+  <div class="p-arrow">
+    <div class="p-arrow-rail"></div>
+    <div class="p-arrow-body">
+      <div class="arr"><div class="arr-line"></div><div class="arr-tip"></div></div>
+      <div class="arr"><div class="arr-line"></div><div class="arr-tip"></div></div>
+    </div>
+  </div>
+
+  <!-- ② INGEST -->
+
+  <div class="p-row">
+    <div class="p-label" style="color:var(--c-ing);">Ingest</div>
+    <div class="p-body">
+      <div class="card-grid two">
+
+```
+    <div class="card ct-ing">
+      <div class="card-head">
+        <svg class="card-icon"><use href="#i-pq"/></svg>
+        <span class="card-title">Dataflow Gen1 — Power Query</span>
+      </div>
+      <div class="tags">
+        <span class="tag tag-l tl-ing">M Language Transforms</span>
+        <span class="tag tag-l tl-ing">Merge SAP HANA + Excel</span>
+        <span class="tag tag-l tl-ing">Reusable Entities</span>
+        <span class="tag tag-l tl-ing">Linked / Computed Entities</span>
+        <span class="tag tag-l tl-ing">Single Source of Truth</span>
+      </div>
+    </div>
+
+    <div class="card ct-ing">
+      <div class="card-head">
+        <span class="card-title">Refresh Schedule</span>
+      </div>
+      <div class="tags">
+        <span class="tag tag-warn">⚠ 4× / day — 6 hr interval (Pro: max 8×)</span>
+        <span class="tag tag-l tl-ing">Dataflow refreshes first</span>
+        <span class="tag tag-l tl-ing">Dataset offset +30 min</span>
+        <span class="tag tag-l tl-ing">Failure alert email</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+```
+
+  </div>
+
+  <!-- arrow -->
+
+  <div class="p-arrow">
+    <div class="p-arrow-rail"></div>
+    <div class="p-arrow-body">
+      <div class="arr"><div class="arr-line"></div><div class="arr-tip"></div></div>
+      <div class="arr"><div class="arr-line"></div><div class="arr-tip"></div></div>
+    </div>
+  </div>
+
+  <!-- ③ WORKSPACE -->
+
+  <div class="p-row">
+    <div class="p-label" style="color:#1D4ED8;">Workspace</div>
+    <div class="p-body" style="padding-left:14px;">
+      <div class="ws-frame">
+        <div class="ws-banner">
+          <svg width="14" height="14" viewBox="0 0 32 32"><use href="#i-pbi"/></svg>
+          Power BI Pro Workspace — Single (scalable to Dev + Prod)
+        </div>
+        <div class="ws-body">
+
+```
+      <!-- Storage -->
+      <div>
+        <div class="ws-section-label" style="color:var(--c-sto);">Storage</div>
+        <div class="ws-cards">
+          <div class="card ct-sto">
+            <div class="card-head"><span class="card-title">Semantic Model (Dataset)</span></div>
+            <div class="tags">
+              <span class="tag tag-l tl-sto">Import Mode</span>
+              <span class="tag tag-l tl-sto">Star Schema</span>
+              <span class="tag tag-l tl-sto">Incremental Refresh</span>
+              <span class="tag tag-l tl-sto">Dataflow as Source</span>
+              <span class="tag tag-warn">⚠ 1 GB model limit (Pro)</span>
+            </div>
+          </div>
+          <div class="card ct-sto">
+            <div class="card-head"><span class="card-title">Data Access</span></div>
+            <div class="tags">
+              <span class="tag tag-l tl-sto">Row-Level Security (RLS)</span>
+              <span class="tag tag-l tl-sto">Dynamic RLS — USERPRINCIPALNAME()</span>
+              <span class="tag tag-l tl-sto">Object-Level Security</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Semantic -->
+      <div>
+        <div class="ws-section-label" style="color:var(--c-sem);">Semantic Model</div>
+        <div class="ws-cards" style="grid-template-columns:1fr">
+          <div class="card ct-sem">
+            <div class="card-head"><span class="card-title">Data Model — Analysis Services Engine</span></div>
+            <div class="tags">
+              <span class="tag tag-l tl-sem">DAX Measures</span>
+              <span class="tag tag-l tl-sem">Calculated Columns / Tables</span>
+              <span class="tag tag-l tl-sem">Date Table (official)</span>
+              <span class="tag tag-l tl-sem">Relationships</span>
+              <span class="tag tag-l tl-sem">KPI Definitions</span>
+              <span class="tag tag-l tl-sem">Display Folders</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reports -->
+      <div>
+        <div class="ws-section-label" style="color:var(--c-rep);">Reports</div>
+        <div class="ws-cards">
+          <div class="card ct-rep">
+            <div class="card-head">
+              <svg class="card-icon"><use href="#i-pbi"/></svg>
+              <span class="card-title">Power BI Report (.pbix / .pbip)</span>
+            </div>
+            <div class="tags">
+              <span class="tag tag-l tl-rep">Desktop Authoring</span>
+              <span class="tag tag-l tl-rep">Bookmarks / Drillthrough</span>
+              <span class="tag tag-l tl-rep">Custom Visuals</span>
+              <span class="tag tag-l tl-rep">JSON Theme</span>
+            </div>
+          </div>
+          <div class="card ct-rep">
+            <div class="card-head"><span class="card-title">Paginated Report (.rdl)</span></div>
+            <div class="tags">
+              <span class="tag tag-l tl-rep">Pixel-Perfect Layout</span>
+              <span class="tag tag-l tl-rep">Print-Ready PDF</span>
+              <span class="tag tag-l tl-rep">Report Builder</span>
+            </div>
+          </div>
+          <div class="card ct-rep">
+            <div class="card-head"><span class="card-title">Dashboard</span></div>
+            <div class="tags">
+              <span class="tag tag-l tl-rep">Pinned Live Tiles</span>
+              <span class="tag tag-l tl-rep">KPI Summary</span>
+              <span class="tag tag-l tl-rep">Q&amp;A / Anomaly Detection</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+```
+
+  </div>
+
+  <!-- arrow -->
+
+  <div class="p-arrow">
+    <div class="p-arrow-rail"></div>
+    <div class="p-arrow-body">
+      <div class="arr"><div class="arr-line"></div><div class="arr-tip"></div></div>
+      <div class="arr"><div class="arr-line"></div><div class="arr-tip"></div></div>
+    </div>
+  </div>
+
+  <!-- ④ DISTRIBUTION -->
+
+  <div class="p-row">
+    <div class="p-label" style="color:var(--c-dis);">Distribute</div>
+    <div class="p-body">
+      <div class="card-grid two">
+
+```
+    <div class="card ct-dis">
+      <div class="card-head">
+        <svg class="card-icon"><use href="#i-teams"/></svg>
+        <span class="card-title">Distribution Channels</span>
+      </div>
+      <div class="tags">
+        <span class="tag tag-l tl-dis">Microsoft Teams</span>
+        <span class="tag tag-l tl-dis">Power BI Service (Web)</span>
+        <span class="tag tag-l tl-dis">Email Subscriptions</span>
+        <span class="tag tag-l tl-dis">PDF / PPT Export</span>
+      </div>
+    </div>
+
+    <div class="card ct-dis">
+      <div class="card-head">
+        <svg class="card-icon"><use href="#i-pbi"/></svg>
+        <span class="card-title">Power BI App — Production Gate</span>
+      </div>
+      <div class="tags">
+        <span class="tag tag-l tl-dis">Curated Navigation</span>
+        <span class="tag tag-l tl-dis">Audience → AAD Group</span>
+        <span class="tag tag-l tl-dis">Custom Branding</span>
+        <span class="tag tag-l tl-dis">Workspace hidden from end users</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+```
+
+  </div>
+
+  <!-- ⑤ SECURITY -->
+
+  <div class="p-row">
+    <div class="p-label" style="color:var(--c-sec);">Security</div>
+    <div class="p-body">
+      <div class="card-grid two">
+
+```
+    <div class="card ct-sec">
+      <div class="card-head">
+        <svg class="card-icon"><use href="#i-aad"/></svg>
+        <span class="card-title">Azure AD / Entra ID</span>
+      </div>
+      <div class="tags">
+        <span class="tag tag-l tl-sec">AAD Security Groups</span>
+        <span class="tag tag-l tl-sec">Group-based Workspace Roles</span>
+        <span class="tag tag-l tl-sec">MFA Enforcement</span>
+        <span class="tag tag-l tl-sec">Conditional Access Policy</span>
+      </div>
+    </div>
+
+    <div class="card ct-sec">
+      <div class="card-head">
+        <svg class="card-icon"><use href="#i-shield"/></svg>
+        <span class="card-title">Monitoring &amp; Audit</span>
+      </div>
+      <div class="tags">
+        <span class="tag tag-l tl-sec">Usage Metrics Report</span>
+        <span class="tag tag-l tl-sec">Activity Log API</span>
+        <span class="tag tag-l tl-sec">Admin Portal</span>
+        <span class="tag tag-l tl-sec">Refresh Failure Alerts</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+```
+
+  </div>
+
+  <!-- ⑥ SCALE-UP -->
+
+  <div class="scaleup">
+    <div class="scaleup-rail"></div>
+    <div class="scaleup-body">
+      <h4>↑ Scale-Up — When to Add Dev + Prod Workspace</h4>
+      <div class="tags">
+        <span class="tag">Team grows beyond 2–3 developers</span>
+        <span class="tag">Simultaneous publish risk</span>
+        <span class="tag">Compliance requires env. separation</span>
+        <span class="tag">dev branch → Dev workspace</span>
+        <span class="tag">main branch → Prod workspace</span>
+        <span class="tag">No extra workspace cost — license only</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end pipeline -->
+
+<!-- ══════════════════ RIGHT: VERSION CONTROL ══════════════════ -->
+
+<div class="vc-sidebar">
+
+  <div class="vc-hdr">
+    <h2>
+      <svg width="16" height="16" viewBox="0 0 32 32" style="flex-shrink:0"><use href="#i-git"/></svg>
+      Version Control
+    </h2>
+    <p>Recommended: .pbip + Azure DevOps Git — No Premium required · Full DAX diff · Rollback any version</p>
+  </div>
+
+  <div class="vc-grid">
+
+  <!-- Format -->
+
+  <div class="vc-sec">
+    <div class="vc-sec-title">① Format — .pbip</div>
+    <div class="vc-card">
+      <div style="font-size:0.68rem;font-weight:600;color:var(--text);margin-bottom:6px;">Save as Power BI Project</div>
+      <div class="tags" style="margin-bottom:8px;">
+        <span class="tag tag-l tl-vc" style="font-size:0.6rem;">File → Save As → Power BI Project</span>
+      </div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:0.59rem;color:var(--text-3);line-height:1.9;">
+        report.pbip<br>
+        report.Dataset / model.bim<br>
+        report.Report / definition.json<br>
+        <span style="color:#C0C4CC;">— all plain JSON, fully diffable —</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Branch -->
+
+  <div class="vc-sec">
+    <div class="vc-sec-title">② Branch Strategy</div>
+    <div class="branch"><span class="bm">main</span>  ──●──●──●──▶ Prod
+       ↑     ↑
+       PR  merge
+<span class="bd">dev</span>   ──●──●──●──▶ Workspace
+<span class="bn">       ↑
+  git commit</span></div>
+  </div>
+
+  <!-- Workflow -->
+
+  <div class="vc-sec">
+    <div class="vc-sec-title">③ Developer Workflow</div>
+    <div class="vc-card">
+      <div class="steps">
+        <div class="step"><div class="snum">1</div><div class="stxt">Edit in <strong>Power BI Desktop</strong> (.pbip)</div></div>
+        <div class="step"><div class="snum">2</div><div class="stxt"><strong>git commit</strong> — descriptive message</div></div>
+        <div class="step"><div class="snum">3</div><div class="stxt">Open <strong>Pull Request</strong> — review DAX diff</div></div>
+        <div class="step"><div class="snum">4</div><div class="stxt">Merge to <strong>main</strong> — triggers pipeline</div></div>
+        <div class="step"><div class="snum">5</div><div class="stxt"><strong>REST API</strong> publishes to workspace</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CI/CD -->
+
+  <div class="vc-sec">
+    <div class="vc-sec-title">④ CI/CD — Azure DevOps Pipeline</div>
+    <div class="vc-card">
+      <div class="tags">
+        <span class="tag tag-l tl-vc">Trigger on main branch merge</span>
+        <span class="tag tag-l tl-vc">PowerShell + PBI REST API</span>
+        <span class="tag tag-l tl-vc">Service Principal auth (AAD)</span>
+        <span class="tag tag-l tl-vc">POST /groups/{id}/imports</span>
+        <span class="tag tag-l tl-vc">Free tier — up to 5 users</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- What's versioned -->
+
+  <div class="vc-sec">
+    <div class="vc-sec-title">What Gets Versioned</div>
+    <div class="vc-card">
+      <table class="vc-tbl">
+        <tr><td class="ty">✓</td><td>DAX measures &amp; expressions</td></tr>
+        <tr><td class="ty">✓</td><td>Report layout &amp; visuals</td></tr>
+        <tr><td class="ty">✓</td><td>Relationships &amp; model schema</td></tr>
+        <tr><td class="ty">✓</td><td>Hierarchies &amp; display folders</td></tr>
+        <tr><td class="tn">✗</td><td>Data (not stored in repo)</td></tr>
+        <tr><td class="tn">✗</td><td>Credentials / gateway config</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Enable -->
+
+  <div class="vc-sec">
+    <div class="vc-sec-title">Enable in Desktop</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:0.61rem;color:var(--text-2);line-height:1.9;background:#FEF8E7;border:1px solid #D9A520;border-radius:4px;padding:9px 11px;">
+      File → Options &amp; Settings<br>
+      → Options → Preview Features<br>
+      → ☑ Power BI Project (.pbip)
+    </div>
+  </div>
+
+  </div><!-- end vc-grid -->
+
+</div><!-- end vc-sidebar -->
+</div><!-- end canvas -->
+
+<!-- ── LEGEND ── -->
+
+<div class="legend">
+  <span class="leg-title">Layer Key —</span>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--c-src)"></div>Source</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--c-ing)"></div>Ingest</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--c-sto)"></div>Storage</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--c-sem)"></div>Semantic</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--c-rep)"></div>Reports</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--c-dis)"></div>Distribution</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--c-sec)"></div>Security</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--c-vc)"></div>Version Control</div>
+  <div class="leg-item" style="margin-left:10px;">
+    <span class="tag tag-warn" style="font-size:0.6rem;">⚠ amber tag = Pro constraint / limit</span>
+  </div>
+</div>
+
+<!-- ── FOOTER ── -->
+
+<footer>
+  <p>Power BI Pro · Internal Employees · Single Workspace Architecture</p>
+  <p>Scalable to Dev + Prod · docs.microsoft.com/power-bi · March 2026</p>
+</footer>
+
+</div><!-- end page -->
+</body>
+</html>
